@@ -1,0 +1,30 @@
+{
+  "experiment": "imgsz ablation",
+  "model": "runs/detect/runs/detect/defectguard_v2_ultra/weights/best.pt",
+  "data": "./data/deeppcb/yolo_format",
+  "results": [
+    {
+      "imgsz": 1280,
+      "map50": 0.9798430438054638,
+      "map50_95": 0.8135511946427632,
+      "per_class_ap50": {
+        "open": 0.9922480620147319,
+        "short": 0.9746956746946749,
+        "mousebite": 0.9557199522609656,
+        "spur": 0.9864633126244862,
+        "copper": 0.9805349324186061,
+        "pinhole": 0.9893963288193185
+      },
+      "per_class_ap50_95": {
+        "open": 0.7417617403386978,
+        "short": 0.7154949409158372,
+        "mousebite": 0.769723809297371,
+        "spur": 0.7861672972272447,
+        "copper": 0.9386483314558556,
+        "pinhole": 0.9295110486215732
+      },
+      "fps": 47.64367747545432,
+      "num_images": 200
+    }
+  ]
+}

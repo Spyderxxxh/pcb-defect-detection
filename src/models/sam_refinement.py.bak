@@ -1,0 +1,207 @@
+"""
+SAM + Level Set 边界精修模块
+"""
+
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
+import cv2
+from typing import List, Dict, Tuple, Optional
+from segment_anything import sam_model_registry, SamPredictor
+
+
+class SAMRefinement(nn.Module):
+    """
+    SAM + Level Set 边界精修
+    
+    流程：
+    1. SAM生成初始mask
+    2. Level Set演化优化边界
+    """
+    
+    def __init__(
+        self,
+        model_type: str = "vit_b",
+        checkpoint: str = "sam_vit_b.pth",
+        device: str = "cuda",
+        level_set_iter: int = 100
+    ):
+        super().__init__()
+        self.device = device
+        self.level_set_iter = level_set_iter
+        
+        # 加载SAM
+        print(f"Loading SAM ({model_type}) for boundary refinement...")
+        sam = sam_model_registry[model_type](checkpoint=checkpoint)
+        sam.to(device)
+        self.predictor = SamPredictor(sam)
+        
+        print("SAM loaded successfully")
+    
+    @torch.no_grad()
+    def refine_detections(
+        self,
+        image: np.ndarray,
+        detections: List[Dict]
+    ) -> List[Dict]:
+        """
+        精修检测结果
+        
+        Args:
+            image: BGR图像 (H, W, 3)
+            detections: 检测结果列表，每个包含 bbox, conf, cls
+        
+        Returns:
+            精修后的检测结果，添加 refined_mask 和 refined_bbox
+        """
+        if len(detections) == 0:
+            return detections
+        
+        # 设置图像
+        self.predictor.set_image(image)
+        
+        refined_detections = []
+        
+        # 逐个处理每个检测框
+        for det in detections:
+            try:
+                bbox = det['bbox']  # [x1, y1, x2, y2]
+                
+                # 转换为SAM输入格式 (单个框)
+                input_box = np.array(bbox).reshape(1, 4)  # [1, 4]
+                
+                # SAM预测mask
+                masks, scores, logits = self.predictor.predict(
+                    point_coords=None,
+                    point_labels=None,
+                    box=input_box,
+                    multimask_output=False
+                )
+                
+                # 取最佳mask
+                mask = masks[0]  # [H, W]
+                
+                # Level Set精修
+                refined_mask = self._level_set_refinement(mask, image)
+                
+                # 从mask计算精修后的bbox
+                refined_bbox = self._mask_to_bbox(refined_mask)
+                
+                # 更新检测结果
+                det['refined_mask'] = refined_mask
+                det['refined_bbox'] = refined_bbox
+                det['original_bbox'] = bbox
+                
+                refined_detections.append(det)
+                
+            except Exception as e:
+                # SAM精修失败，保留原始检测
+                det['refined_mask'] = None
+                det['refined_bbox'] = det['bbox']
+                det['sam_error'] = str(e)
+                refined_detections.append(det)
+        
+        return refined_detections
+    
+    def _level_set_refinement(
+        self,
+        initial_mask: np.ndarray,
+        image: np.ndarray,
+        max_iter: Optional[int] = None
+    ) -> np.ndarray:
+        """
+        Level Set演化优化边界
+        
+        Args:
+            initial_mask: 初始mask [H, W]
+            image: 原始图像
+            max_iter: 最大迭代次数
+        
+        Returns:
+            优化后的mask
+        """
+        if max_iter is None:
+            max_iter = self.level_set_iter
+        
+        # 简化版Level Set - 使用形态学操作近似
+        # 实际应用可使用更复杂的变分水平集方法
+        
+        mask = initial_mask.astype(np.uint8) * 255
+        
+        # 高斯模糊平滑
+        mask_smooth = cv2.GaussianBlur(mask, (5, 5), 0)
+        
+        # 阈值得到更干净的边界
+        _, mask_clean = cv2.threshold(mask_smooth, 127, 255, cv2.THRESH_BINARY)
+        
+        # 形态学闭运算填充小孔
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+        mask_refined = cv2.morphologyEx(mask_clean, cv2.MORPH_CLOSE, kernel)
+        
+        return mask_refined > 0
+    
+    def _mask_to_bbox(self, mask: np.ndarray) -> List[float]:
+        """从mask计算边界框"""
+        y_indices, x_indices = np.where(mask)
+        
+        if len(y_indices) == 0:
+            return [0, 0, 0, 0]
+        
+        x1 = float(np.min(x_indices))
+        y1 = float(np.min(y_indices))
+        x2 = float(np.max(x_indices))
+        y2 = float(np.max(y_indices))
+        
+        return [x1, y1, x2, y2]
+
+
+class LevelSetEvolution:
+    """
+    变分水平集演化（简化实现）
+    
+    参考: Chan-Vese模型
+    """
+    
+    def __init__(
+        self,
+        lambda1: float = 1.0,
+        lambda2: float = 1.0,
+        mu: float = 0.1,
+        dt: float = 0.1,
+        max_iter: int = 100
+    ):
+        self.lambda1 = lambda1
+        self.lambda2 = lambda2
+        self.mu = mu
+        self.dt = dt
+        self.max_iter = max_iter
+    
+    def evolve(self, image: np.ndarray, initial_phi: np.ndarray) -> np.ndarray:
+        """
+        水平集演化
+        
+        Args:
+            image: 灰度图像
+            initial_phi: 初始水平集函数
+        
+        Returns:
+            演化后的分割结果
+        """
+        phi = initial_phi.copy()
+        
+        for _ in range(self.max_iter):
+            # Heaviside函数近似
+            H = 0.5 * (1 + (2 / np.pi) * np.arctan(phi / self.mu))
+            
+            # 计算区域均值
+            c1 = np.sum(image * H) / (np.sum(H) + 1e-10)
+            c2 = np.sum(image * (1 - H)) / (np.sum(1 - H) + 1e-10)
+            
+            # 更新水平集
+            phi = phi + self.dt * (
+                self.lambda1 * (image - c1)**2 -
+                self.lambda2 * (image - c2)**2
+            )
+        
+        return phi > 0

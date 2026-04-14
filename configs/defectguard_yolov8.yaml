@@ -1,0 +1,208 @@
+# DefectGuard YOLOv8 + NonLocal 配置
+# 针对PCB缺陷检测场景优化
+
+project:
+  name: "DefectGuard"
+  version: "1.0.0"
+  description: "PCB缺陷检测系统 - YOLOv8 + NonLocal + SAM"
+
+# 模型配置
+model:
+  type: "YOLOv8NonLocal"
+  backbone: "resnet50"
+  num_classes: 5
+  pretrained: true
+  pretrained_weights: "yolov8m.pt"
+  
+  # NonLocal注意力模块配置
+  nonlocal:
+    enabled: true
+    in_channels: 512
+    inter_channels: 256
+    sub_sample: true
+    bn_layer: true
+  
+  # SAM边界精修配置
+  sam_refinement:
+    enabled: true
+    model_type: "vit_b"  # 可选项: vit_b (基础), vit_l (大), vit_h (巨大)
+    checkpoint: "sam_vit_b.pth"
+    level_set:
+      enabled: true  # 启用Level Set精修
+      max_iter: 150  # 增加迭代次数
+      lambda1: 1.0
+      lambda2: 1.0
+      mu: 0.05  # 降低平滑度权重，保留更多细节
+      dt: 0.05  # 减小步长，更精细的演化
+      mu: 0.1
+      dt: 0.1
+
+# 数据集配置
+dataset:
+  type: "PCBDefectDataset"
+  data_root: "./data/pcb_defect"
+  train_ann: "./data/pcb_defect/train/annotations.json"
+  val_ann: "./data/pcb_defect/val/annotations.json"
+  test_ann: "./data/pcb_defect/test/annotations.json"
+  
+  # 图像预处理
+  img_size: 640
+  batch_size: 16
+  num_workers: 8
+  
+  # 数据增强
+  augmentation:
+    enabled: true
+    hsv_h: 0.015
+    hsv_s: 0.7
+    hsv_v: 0.4
+    degrees: 0.0
+    translate: 0.1
+    scale: 0.5
+    shear: 0.0
+    perspective: 0.0
+    flipud: 0.0
+    fliplr: 0.5
+    mosaic: 1.0
+    mixup: 0.0
+    copy_paste: 0.0
+
+# 训练配置
+training:
+  epochs: 100
+  warmup_epochs: 3
+  warmup_momentum: 0.8
+  warmup_bias_lr: 0.1
+  
+  # 优化器
+  optimizer:
+    type: "AdamW"
+    lr: 0.001
+    momentum: 0.9
+    weight_decay: 0.0005
+  
+  # 学习率调度
+  scheduler:
+    type: "CosineAnnealingLR"
+    T_max: 100
+    eta_min: 0.00001
+  
+  # 损失函数权重
+  loss:
+    box: 7.5
+    cls: 0.5
+    dfl: 1.5
+  
+  # 设备配置
+  device: "cuda"
+  multi_gpu: false
+  sync_bn: false
+  
+  # 保存配置
+  save_period: 10
+  val_period: 1
+  
+  # 早停
+  early_stopping:
+    enabled: true
+    patience: 20
+    min_delta: 0.001
+
+# 评估配置
+evaluation:
+  iou_threshold: 0.5
+  conf_threshold: 0.25
+  max_det: 300
+  
+  # 指标计算
+  metrics:
+    - "mAP@0.5"
+    - "mAP@0.5:0.95"
+    - "precision"
+    - "recall"
+    - "f1_score"
+
+# Agent系统配置
+agent:
+  enabled: true
+  
+  # 性能模式
+  mode: "balanced"  # high_precision, balanced, high_speed
+  
+  # 4-Agent配置
+  agents:
+    collector:
+      enabled: true
+      metrics:
+        - "latency"
+        - "memory"
+        - "gpu_utilization"
+        - "fps"
+        - "throughput"
+      sampling_interval: 1.0  # 秒
+    
+    analyzer:
+      enabled: true
+      bottleneck_threshold: 0.8
+      analysis_depth: "stage"  # pipeline, stage, operator
+    
+    optimizer:
+      enabled: true
+      strategies:
+        - "batch_size_tuning"
+        - "precision_calibration"
+        - "tensorrt_optimization"
+        - "model_pruning"
+    
+    executor:
+      enabled: true
+      auto_apply: false  # 是否自动应用优化
+      require_approval: true
+  
+  # A/B测试配置
+  ab_test:
+    enabled: true
+    min_samples: 1000
+    confidence_level: 0.95
+    max_precision_drop: 0.02  # 最大允许精度下降
+
+# 部署配置
+deployment:
+  # TensorRT优化
+  tensorrt:
+    enabled: false
+    fp16: true
+    int8: false
+    max_batch_size: 16
+    max_workspace_size: 1073741824  # 1GB
+  
+  # ONNX导出
+  onnx:
+    enabled: false
+    opset_version: 12
+    simplify: true
+  
+  # 量化
+  quantization:
+    enabled: false
+    backend: "fbgemm"  # fbgemm, qnnpack
+    dtype: "quint8"
+  
+  # 推理服务
+  inference:
+    host: "0.0.0.0"
+    port: 8000
+    workers: 4
+    max_batch_size: 16
+    timeout: 30
+
+# 日志配置
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "./logs/training.log"
+  tensorboard: true
+  wandb:
+    enabled: false
+    project: "defectguard"
+    entity: null

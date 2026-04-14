@@ -1,0 +1,39 @@
+# 模型权重（通常几百MB，不适合放GitHub）
+*.pt
+*.pth
+*.onnx
+*.engine
+*.trt
+
+# 数据集
+data/
+datasets/
+
+# 输出结果
+outputs/
+runs/
+
+# Python缓存
+__pycache__/
+*.pyc
+*.pyo
+.Python
+
+# 虚拟环境
+venv/
+env/
+*.egg-info/
+
+# 日志
+*.log
+wandb/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDE
+.vscode/
+.idea/
+
+# 系统文件
+.DS_Store

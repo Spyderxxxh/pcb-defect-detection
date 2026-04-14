@@ -1,0 +1,75 @@
+version: '3.8'
+
+services:
+  defectguard:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: defectguard:latest
+    container_name: defectguard_mvp
+    
+    # GPU支持
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    
+    # 端口映射
+    ports:
+      - "8000:8000"
+    
+    # 卷挂载
+    volumes:
+      - ../data:/workspace/data
+      - ../models:/workspace/models
+      - ../outputs:/workspace/outputs
+      - ../logs:/workspace/logs
+    
+    # 环境变量
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - PYTHONUNBUFFERED=1
+    
+    # 工作目录
+    working_dir: /workspace
+    
+    # 保持运行
+    stdin_open: true
+    tty: true
+    
+    # 命令
+    command: >
+      bash -c "
+        echo 'DefectGuard MVP Pipeline Ready!' &&
+        echo 'Usage:' &&
+        echo '  python train.py --config configs/defectguard_yolov8.yaml' &&
+        echo '  python inference.py --source data/test.jpg --weights models/best.pt' &&
+        /bin/bash
+      "
+
+  # TensorRT优化服务（可选）
+  tensorrt:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.tensorrt
+    image: defectguard:tensorrt
+    container_name: defectguard_tensorrt
+    profiles: ["tensorrt"]
+    
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    
+    ports:
+      - "8001:8000"
+    
+    volumes:
+      - ../models:/workspace/models
+      - ../outputs:/workspace/outputs

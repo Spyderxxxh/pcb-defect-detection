@@ -1,0 +1,34 @@
+{
+  "experiment": "model size ablation",
+  "imgsz": 1280,
+  "data": "./data/deeppcb/yolo_format",
+  "results": [
+    {
+      "model_size": "yolov8l",
+      "weights": "yolov8l.pt",
+      "map50": 0.0,
+      "map50_95": 0.0,
+      "per_class_ap50": {
+        "open": 0.0,
+        "short": 0.0,
+        "mousebite": 0.0,
+        "spur": 0.0,
+        "copper": 0.0,
+        "pinhole": 0.0
+      },
+      "per_class_ap50_95": {
+        "open": 0.0,
+        "short": 0.0,
+        "mousebite": 0.0,
+        "spur": 0.0,
+        "copper": 0.0,
+        "pinhole": 0.0
+      },
+      "fps": 46.62502214917102,
+      "num_images": 200
+    }
+  ],
+  "pareto_optimal": [
+    "yolov8l"
+  ]
+}
