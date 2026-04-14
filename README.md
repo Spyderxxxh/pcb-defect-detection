@@ -120,4 +120,4 @@ docker run --gpus all -p 8000:8000 mvp_pipeline:latest
 
 ## 作者
 
-徐浩 - 算法工程师 | 计算机视觉 | AI Agent
+kaneshiroxxxh@gmail.com
